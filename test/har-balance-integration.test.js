@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { TestBalance } from "../src/core/balance/test-balance.js";
+import { RiskManager } from "../src/core/risk/abstract-model/risk-manager.js";
 import { HARConfiguration } from "../src/core/strategies/har/har-configuration.js";
 import { executeHARStep } from "../src/core/strategies/har/run-har-step.js";
 
@@ -22,13 +23,27 @@ function makeConfiguration(overrides = {}) {
 
 const historicalPrices = Array(12).fill(100);
 
-function runStep({ balance, currentPrice, configuration, quantity = 1 }) {
+function makeRiskManager(overrides = {}) {
+  return new RiskManager({
+    maxTradeValue: 10000,
+    ...overrides,
+  });
+}
+
+function runStep({
+  balance,
+  currentPrice,
+  configuration,
+  quantity = 1,
+  riskManager = makeRiskManager(),
+}) {
   return executeHARStep({
     configuration: configuration ?? makeConfiguration(),
     historicalPrices,
     currentPrice,
     balance,
     quantity,
+    riskManager,
   });
 }
 
@@ -107,4 +122,23 @@ test("rejects an invalid trade quantity when a signal requires a trade", () => {
   );
 
   assert.equal(balance.snapshot().trades.length, 0);
+});
+
+test("risk rejection leaves the simulated balance unchanged", () => {
+  const balance = new TestBalance();
+  const before = balance.snapshot();
+
+  assert.throws(
+    () =>
+      runStep({
+        balance,
+        currentPrice: 97,
+        riskManager: makeRiskManager({ maxTradeValue: 50 }),
+      }),
+    /Trade value exceeds the configured maximum/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+  assert.equal(balance.quoteBalance, 10000);
+  assert.equal(balance.baseBalance, 0);
 });

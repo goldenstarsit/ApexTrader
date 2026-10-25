@@ -6,6 +6,7 @@ export function executeHARStep({
   currentPrice,
   balance,
   quantity,
+  riskManager,
 }) {
   if (
     !balance ||
@@ -28,6 +29,18 @@ export function executeHARStep({
   if (!Number.isFinite(quantity) || quantity <= 0) {
     throw new RangeError("quantity must be a positive finite number.");
   }
+
+  if (
+    !riskManager ||
+    typeof riskManager.validateTrade !== "function"
+  ) {
+    throw new TypeError("A compatible risk manager is required.");
+  }
+
+  riskManager.validateTrade({
+    quantity,
+    price: currentPrice,
+  });
 
   let trade = null;
 

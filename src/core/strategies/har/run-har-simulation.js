@@ -6,6 +6,7 @@ export function runHARSimulation({
   prices,
   balance,
   quantity,
+  riskManager,
 }) {
   if (!Array.isArray(historicalPrices) || historicalPrices.length === 0) {
     throw new TypeError("historicalPrices must be a non-empty array.");
@@ -27,6 +28,13 @@ export function runHARSimulation({
     throw new TypeError("A compatible test balance is required.");
   }
 
+  if (
+    !riskManager ||
+    typeof riskManager.validateTrade !== "function"
+  ) {
+    throw new TypeError("A compatible risk manager is required.");
+  }
+
   const rollingPrices = [...historicalPrices];
   const steps = [];
 
@@ -37,6 +45,7 @@ export function runHARSimulation({
       currentPrice,
       balance,
       quantity,
+      riskManager,
     });
 
     steps.push({

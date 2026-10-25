@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { TestBalance } from "../src/core/balance/test-balance.js";
+import { RiskManager } from "../src/core/risk/abstract-model/risk-manager.js";
 import { HARConfiguration } from "../src/core/strategies/har/har-configuration.js";
 import { runHARSimulation } from "../src/core/strategies/har/run-har-simulation.js";
 
@@ -22,6 +23,13 @@ function makeConfiguration(overrides = {}) {
 
 const historicalPrices = Array(12).fill(100);
 
+function makeRiskManager(overrides = {}) {
+  return new RiskManager({
+    maxTradeValue: 10000,
+    ...overrides,
+  });
+}
+
 test("simulation executes sequential BUY and SELL signals", () => {
   const balance = new TestBalance({
     quoteBalance: 10000,
@@ -29,6 +37,7 @@ test("simulation executes sequential BUY and SELL signals", () => {
   });
 
   const result = runHARSimulation({
+    riskManager: makeRiskManager(),
     configuration: makeConfiguration(),
     historicalPrices,
     prices: [97, 103],
@@ -53,6 +62,7 @@ test("simulation rolls historical prices forward after every step", () => {
   const balance = new TestBalance();
 
   const result = runHARSimulation({
+    riskManager: makeRiskManager(),
     configuration: makeConfiguration(),
     historicalPrices,
     prices: [100, 101],
@@ -71,6 +81,7 @@ test("disabled strategy completes simulation without trades", () => {
   const balance = new TestBalance();
 
   const result = runHARSimulation({
+    riskManager: makeRiskManager(),
     configuration: makeConfiguration({ enabled: false }),
     historicalPrices,
     prices: [97, 103],
@@ -89,6 +100,7 @@ test("invalid price sequence is rejected before any trade", () => {
   assert.throws(
     () =>
       runHARSimulation({
+    riskManager: makeRiskManager(),
         configuration: makeConfiguration(),
         historicalPrices,
         prices: [97, 0],
@@ -106,6 +118,7 @@ test("simulation rejects an empty price sequence", () => {
   assert.throws(
     () =>
       runHARSimulation({
+    riskManager: makeRiskManager(),
         configuration: makeConfiguration(),
         historicalPrices,
         prices: [],
@@ -122,6 +135,7 @@ test("simulation rejects insufficient historical samples", () => {
   assert.throws(
     () =>
       runHARSimulation({
+    riskManager: makeRiskManager(),
         configuration: makeConfiguration(),
         historicalPrices: [100, 100],
         prices: [97],
