@@ -71,3 +71,68 @@ test("snapshot trade records cannot mutate the internal trade history", () => {
 
   assert.equal(balance.snapshot().trades[0].side, "BUY");
 });
+
+test("BUY accepts exact decimal cost and never leaves a negative quote balance", () => {
+  const balance = new TestBalance({
+    quoteBalance: 0.3,
+    baseBalance: 0,
+  });
+
+  const trade = balance.buy(3, 0.1);
+
+  assert.equal(trade.side, "BUY");
+  assert.equal(balance.quoteBalance, 0);
+  assert.equal(balance.baseBalance, 3);
+  assert.equal(balance.snapshot().trades.length, 1);
+});
+
+test("BUY deducts the trade fee from quote balance", () => {
+  const balance = new TestBalance({ quoteBalance: 500 });
+
+  const trade = balance.buy(2, 100, { fee: 0.2 });
+
+  assert.equal(trade.total, 200);
+  assert.equal(trade.fee, 0.2);
+  assert.equal(balance.quoteBalance, 299.8);
+  assert.equal(balance.baseBalance, 2);
+  assert.equal(balance.snapshot().trades.length, 1);
+});
+
+test("SELL deducts the trade fee from sale proceeds", () => {
+  const balance = new TestBalance({
+    quoteBalance: 100,
+    baseBalance: 3,
+  });
+
+  const trade = balance.sell(2, 100, { fee: 0.2 });
+
+  assert.equal(trade.total, 200);
+  assert.equal(trade.fee, 0.2);
+  assert.equal(balance.quoteBalance, 299.8);
+  assert.equal(balance.baseBalance, 1);
+  assert.equal(balance.snapshot().trades.length, 1);
+});
+
+test("rejects an invalid fee without changing balances or history", () => {
+  const balance = new TestBalance({ quoteBalance: 500 });
+  const before = balance.snapshot();
+
+  assert.throws(
+    () => balance.buy(1, 100, { fee: -1 }),
+    /fee must be a non-negative finite number/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+});
+
+test("BUY keeps repeated decimal quantities exact", () => {
+  const balance = new TestBalance({
+    quoteBalance: 100,
+    baseBalance: 0,
+  });
+
+  balance.buy(0.1, 1);
+  balance.buy(0.2, 1);
+
+  assert.equal(balance.baseBalance, 0.3);
+});

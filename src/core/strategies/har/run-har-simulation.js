@@ -7,6 +7,7 @@ export function runHARSimulation({
   balance,
   quantity,
   riskManager,
+  marketRules,
 }) {
   if (!Array.isArray(historicalPrices) || historicalPrices.length === 0) {
     throw new TypeError("historicalPrices must be a non-empty array.");
@@ -46,6 +47,7 @@ export function runHARSimulation({
       balance,
       quantity,
       riskManager,
+      marketRules,
     });
 
     steps.push({

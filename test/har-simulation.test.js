@@ -147,3 +147,51 @@ test("simulation rejects insufficient historical samples", () => {
 
   assert.equal(balance.snapshot().trades.length, 0);
 });
+
+
+test("simulation passes market rules to automatic HAR sizing", () => {
+  const balance = new TestBalance({ quoteBalance: 1000 });
+
+  const result = runHARSimulation({
+    riskManager: makeRiskManager(),
+    configuration: makeConfiguration(),
+    historicalPrices,
+    prices: [97],
+    balance,
+    marketRules: {
+      quantityStep: 0.01,
+      minQuantity: 0.01,
+      quoteAmountPrecisionMarket: 10,
+      maxQuoteAmountMarket: 1000,
+      takerCommission: 0,
+    },
+  });
+
+  assert.equal(result.steps[0].signal, "BUY");
+  assert.equal(result.steps[0].trade.quantity, 0.11);
+  assert.equal(result.finalBalance.trades.length, 1);
+});
+
+test("simulation refuses automatic sizing when minimum quote amount is unknown", () => {
+  const balance = new TestBalance();
+  const before = balance.snapshot();
+
+  assert.throws(
+    () => runHARSimulation({
+      riskManager: makeRiskManager(),
+      configuration: makeConfiguration(),
+      historicalPrices,
+      prices: [97],
+      balance,
+      marketRules: {
+        quantityStep: 0.01,
+        minQuantity: 0.01,
+        quoteAmountPrecisionMarket: null,
+        maxQuoteAmountMarket: 1000,
+      },
+    }),
+    /verified market-order minimum quote amount/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+});

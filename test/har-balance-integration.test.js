@@ -36,6 +36,7 @@ function runStep({
   configuration,
   quantity = 1,
   riskManager = makeRiskManager(),
+  marketRules,
 }) {
   return executeHARStep({
     configuration: configuration ?? makeConfiguration(),
@@ -44,6 +45,7 @@ function runStep({
     balance,
     quantity,
     riskManager,
+    marketRules,
   });
 }
 
@@ -141,4 +143,193 @@ test("risk rejection leaves the simulated balance unchanged", () => {
   assert.deepEqual(balance.snapshot(), before);
   assert.equal(balance.quoteBalance, 10000);
   assert.equal(balance.baseBalance, 0);
+});
+
+test("BUY respects the gross risk limit and separately checks balance including fee", () => {
+  const balance = new TestBalance({ quoteBalance: 97.05 });
+  const before = balance.snapshot();
+
+  assert.throws(
+    () =>
+      runStep({
+        balance,
+        currentPrice: 97,
+        riskManager: makeRiskManager({
+          maxTradeValue: 97,
+          feeRate: 0.001,
+        }),
+      }),
+    /Insufficient quote balance/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+});
+
+test("HAR BUY deducts the Risk Manager fee from quote balance", () => {
+  const balance = new TestBalance();
+
+  const result = runStep({
+    balance,
+    currentPrice: 97,
+    riskManager: makeRiskManager({ feeRate: 0.001 }),
+  });
+
+  assert.equal(result.trade.total, 97);
+  assert.equal(result.trade.fee, 0.097);
+  assert.equal(balance.quoteBalance, 9902.903);
+  assert.equal(balance.baseBalance, 1);
+});
+
+test("HAR SELL deducts the Risk Manager fee from sale proceeds", () => {
+  const balance = new TestBalance({
+    quoteBalance: 500,
+    baseBalance: 2,
+  });
+
+  const result = runStep({
+    balance,
+    currentPrice: 103,
+    riskManager: makeRiskManager({ feeRate: 0.001 }),
+  });
+
+  assert.equal(result.trade.total, 103);
+  assert.ok(Math.abs(result.trade.fee - 0.103) < 1e-12);
+  assert.equal(balance.quoteBalance, 602.897);
+  assert.equal(balance.baseBalance, 1);
+});
+
+
+test("automatic HAR sizing uses verified market minimum and quantity step", () => {
+  const balance = new TestBalance({ quoteBalance: 1000 });
+  const result = runStep({
+    balance,
+    currentPrice: 97,
+    marketRules: {
+      quantityStep: 0.01,
+      minQuantity: 0.01,
+      quoteAmountPrecisionMarket: 10,
+      maxQuoteAmountMarket: 1000,
+      takerCommission: 0,
+    },
+  });
+
+  assert.equal(result.signal, "BUY");
+  assert.equal(result.trade.quantity, 0.11);
+  assert.equal(result.trade.total, 10.67);
+  assert.equal(balance.snapshot().trades.length, 1);
+});
+
+test("automatic HAR uses the MEXC taker commission for sizing and BUY balance", () => {
+  const balance = new TestBalance({ quoteBalance: 1000 });
+  const beforeBase = balance.baseBalance;
+
+  const result = runStep({
+    balance,
+    currentPrice: 97,
+    riskManager: makeRiskManager({ feeRate: 0.2 }),
+    marketRules: {
+      quantityStep: 0.01,
+      minQuantity: 0.01,
+      quoteAmountPrecisionMarket: 10,
+      maxQuoteAmountMarket: 1000,
+      takerCommission: 0.01,
+    },
+  });
+
+  assert.equal(result.trade.quantity, 0.11);
+  assert.equal(result.trade.total, 10.67);
+  assert.equal(result.trade.fee, 0.1067);
+  assert.equal(balance.quoteBalance, 989.2233);
+  assert.equal(balance.baseBalance, beforeBase + 0.11);
+});
+
+test("automatic HAR rejects a missing or invalid MEXC taker commission without trading", () => {
+  for (const takerCommission of [undefined, null, -0.001, 1.001, Infinity, NaN]) {
+    const balance = new TestBalance({ quoteBalance: 1000 });
+    const before = balance.snapshot();
+    const marketRules = {
+      quantityStep: 0.01,
+      minQuantity: 0.01,
+      quoteAmountPrecisionMarket: 10,
+      maxQuoteAmountMarket: 1000,
+    };
+
+    if (takerCommission !== undefined) {
+      marketRules.takerCommission = takerCommission;
+    }
+
+    assert.throws(
+      () => runStep({
+        balance,
+        currentPrice: 97,
+        marketRules,
+      }),
+      /verified MEXC taker commission/
+    );
+
+    assert.deepEqual(balance.snapshot(), before);
+  }
+});
+
+test("automatic HAR sizing refuses an unknown maximum quote amount", () => {
+  const balance = new TestBalance({ quoteBalance: 1000 });
+  const before = balance.snapshot();
+
+  assert.throws(
+    () => runStep({
+      balance,
+      currentPrice: 97,
+      marketRules: {
+        quantityStep: 0.01,
+        minQuantity: 0.01,
+        quoteAmountPrecisionMarket: 10,
+        maxQuoteAmountMarket: null,
+      },
+    }),
+    /verified market-order maximum quote amount/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+});
+
+test("automatic HAR sizing refuses an unknown quantity step", () => {
+  const balance = new TestBalance({ quoteBalance: 1000 });
+  const before = balance.snapshot();
+
+  assert.throws(
+    () => runStep({
+      balance,
+      currentPrice: 97,
+      marketRules: {
+        quantityStep: null,
+        minQuantity: 0.01,
+        quoteAmountPrecisionMarket: 10,
+        maxQuoteAmountMarket: 1000,
+      },
+    }),
+    /verified quantity step/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+});
+
+test("automatic HAR sizing refuses an unknown minimum quote amount", () => {
+  const balance = new TestBalance();
+  const before = balance.snapshot();
+
+  assert.throws(
+    () => runStep({
+      balance,
+      currentPrice: 97,
+      marketRules: {
+        quantityStep: 0.01,
+        minQuantity: 0.01,
+        quoteAmountPrecisionMarket: null,
+        maxQuoteAmountMarket: 1000,
+      },
+    }),
+    /verified market-order minimum quote amount/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
 });
