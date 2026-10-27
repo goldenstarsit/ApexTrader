@@ -12,7 +12,7 @@ export async function runHARPublicSimulation({
   fetchImpl = fetch,
   quoteBalance = 1000,
   baseBalance = 0,
-  rangeValue = 1,
+  rangeValue = 0.5,
   maxTradeValue = 100,
 } = {}) {
   if (typeof symbol !== "string" || !/^[A-Z0-9]{2,30}$/.test(symbol)) {

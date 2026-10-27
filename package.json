@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "node --test --test-concurrency=1",
-    "har:simulate": "node scripts/har-simulation.js"
+    "har:simulate": "node scripts/har-simulation.js",
+    "har:simulate-many": "node scripts/har-multi-simulation.js"
   },
   "dependencies": {
     "next": "16.4.3",
