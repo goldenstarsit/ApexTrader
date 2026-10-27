@@ -196,3 +196,71 @@ test("persistent HAR stops before the next price when saving a trade fails", asy
   assert.equal(saveAttempts, 2);
   assert.deepEqual(balance.snapshot(), before);
 });
+
+test("persistent HAR does not persist a trade rejected by the risk manager", async () => {
+  let saveCount = 0;
+
+  const store = {
+    async loadState() {
+      return null;
+    },
+    async saveState() {
+      saveCount += 1;
+    },
+  };
+
+  const balance = await TestBalance.create({ store });
+  const initialSaveCount = saveCount;
+  const before = balance.snapshot();
+
+  await assert.rejects(
+    runPersistentHARSimulation({
+      configuration: makeConfiguration(),
+      historicalPrices,
+      prices: [97, 103],
+      balance,
+      quantity: 1,
+      riskManager: makeRiskManager({ maxTradeValue: 50 }),
+    }),
+    /Trade value exceeds the configured maximum/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+  assert.equal(saveCount, initialSaveCount);
+});
+
+test("persistent HAR does not persist a trade when quote balance is insufficient", async () => {
+  let saveCount = 0;
+
+  const store = {
+    async loadState() {
+      return null;
+    },
+    async saveState() {
+      saveCount += 1;
+    },
+  };
+
+  const balance = await TestBalance.create({
+    store,
+    quoteBalance: 10,
+    baseBalance: 0,
+  });
+  const initialSaveCount = saveCount;
+  const before = balance.snapshot();
+
+  await assert.rejects(
+    runPersistentHARSimulation({
+      configuration: makeConfiguration(),
+      historicalPrices,
+      prices: [97, 103],
+      balance,
+      quantity: 1,
+      riskManager: makeRiskManager(),
+    }),
+    /Insufficient quote balance/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+  assert.equal(saveCount, initialSaveCount);
+});
