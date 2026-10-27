@@ -89,7 +89,7 @@ export async function getMexcPublicMarketData({
     throw new Error(`MEXC Spot market ${symbol} does not support MARKET orders.`);
   }
 
-  if (market.tradeSideType !== "1") {
+  if (market.tradeSideType !== "1" && market.tradeSideType !== 1) {
     throw new Error(
       `MEXC Spot market ${symbol} does not permit both BUY and SELL for HAR.`
     );

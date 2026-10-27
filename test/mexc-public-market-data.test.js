@@ -189,6 +189,18 @@ test("rejects a market that does not support MARKET orders", async () => {
   );
 });
 
+test("accepts numeric tradeSideType 1 from the MEXC API", async () => {
+  const { fetchImpl } = createFetch({ tradeSideType: 1 });
+
+  const result = await getMexcPublicMarketData({
+    symbol: "BTCUSDT",
+    limit: 2,
+    fetchImpl,
+  });
+
+  assert.equal(result.symbol, "BTCUSDT");
+});
+
 test("rejects a market that permits BUY but not SELL", async () => {
   const { fetchImpl } = createFetch({ tradeSideType: "2" });
 
