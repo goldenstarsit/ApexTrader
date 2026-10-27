@@ -70,18 +70,25 @@ function createFetch({
       };
     }
 
+    const now = 1_700_000_000_000;
+    const intervalMs = 5 * 60_000;
+
     return {
       ok: true,
       status: 200,
       json: async () =>
-        Array.from({ length: candleCount }, (_, index) => [
-          index,
-          "99",
-          "101",
-          "98",
-          String(100 + index),
-          "10",
-        ]),
+        Array.from({ length: candleCount }, (_, index) => {
+          const openTime = now - (candleCount - index) * intervalMs;
+          return [
+            openTime,
+            "99",
+            "101",
+            "98",
+            String(100 + index),
+            "10",
+            openTime + intervalMs - 1,
+          ];
+        }),
     };
   };
 
@@ -311,5 +318,78 @@ test("rejects an HTTP failure", async () => {
       fetchImpl,
     }),
     /HTTP 503/
+  );
+});
+
+
+test("reads the current timestamp only once", async () => {
+  const { fetchImpl } = createFetch();
+  let calls = 0;
+
+  const result = await getMexcPublicMarketData({
+    symbol: "BTCUSDT",
+    limit: 2,
+    fetchImpl,
+    now: () => {
+      calls += 1;
+      return 1_800_000_000_000;
+    },
+  });
+
+  assert.equal(calls, 1);
+  assert.deepEqual(result.closingPrices, [100, 101]);
+});
+
+test("rejects candle timestamps whose interval end exceeds safe integer range", async () => {
+  const { fetchImpl } = createFetch();
+
+  await assert.rejects(
+    getMexcPublicMarketData({
+      symbol: "BTCUSDT",
+      limit: 2,
+      fetchImpl: async (url, options) => {
+        const response = await fetchImpl(url, options);
+        if (String(url).includes("/klines")) {
+          const candles = await response.json();
+          const unsafeOpenTime = Number.MAX_SAFE_INTEGER - 100_000;
+          candles[0][0] = unsafeOpenTime;
+          candles[0][6] = unsafeOpenTime + 299_999;
+          return { ...response, json: async () => candles };
+        }
+        return response;
+      },
+    }),
+    /invalid timestamps/
+  );
+});
+
+test("rejects 1000 requested candles when the final API candle is incomplete", async () => {
+  const { fetchImpl, requests } = createFetch({ candleCount: 1000 });
+
+  await assert.rejects(
+    getMexcPublicMarketData({
+      symbol: "BTCUSDT",
+      limit: 1000,
+      fetchImpl,
+      now: () => 1_700_000_000_000 - 1,
+    }),
+    /too few completed candles/
+  );
+
+  const klineRequest = requests.find((url) => url.includes("/klines?"));
+  assert.match(klineRequest, /limit=1000(?:&|$)/);
+});
+
+test("rejects a non-finite current timestamp", async () => {
+  const { fetchImpl } = createFetch();
+
+  await assert.rejects(
+    getMexcPublicMarketData({
+      symbol: "BTCUSDT",
+      limit: 2,
+      fetchImpl,
+      now: () => Number.NaN,
+    }),
+    /finite timestamp/
   );
 });

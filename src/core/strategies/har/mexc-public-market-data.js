@@ -35,6 +35,7 @@ export async function getMexcPublicMarketData({
   interval = "5m",
   limit = 12,
   fetchImpl = fetch,
+  now = () => Date.now(),
 } = {}) {
   if (
     typeof symbol !== "string" ||
@@ -64,7 +65,7 @@ export async function getMexcPublicMarketData({
       fetchImpl
     ),
     getJson(
-      `${BASE_URL}/api/v3/klines?symbol=${encodedSymbol}&interval=${encodedInterval}&limit=${limit}`,
+      `${BASE_URL}/api/v3/klines?symbol=${encodedSymbol}&interval=${encodedInterval}&limit=${Math.min(limit + 1, 1000)}`,
       fetchImpl
     ),
   ]);
@@ -105,17 +106,77 @@ export async function getMexcPublicMarketData({
     throw new Error("MEXC ticker symbol does not match the requested market.");
   }
 
-  if (!Array.isArray(candles) || candles.length !== limit) {
+  if (!Array.isArray(candles) || candles.length < limit) {
     throw new Error("MEXC returned an unexpected number of candles.");
   }
 
-  const closingPrices = candles.map((candle, index) => {
-    if (!Array.isArray(candle) || candle.length < 5) {
+  const intervalMatch = /^(\d+)([mhdw])$/.exec(interval);
+
+  if (!intervalMatch) {
+    throw new RangeError("interval is invalid.");
+  }
+
+  const intervalUnits = {
+    m: 60_000,
+    h: 3_600_000,
+    d: 86_400_000,
+    w: 604_800_000,
+  };
+  const intervalCount = Number(intervalMatch[1]);
+  const intervalMs = intervalCount * intervalUnits[intervalMatch[2]];
+
+  if (!Number.isSafeInteger(intervalMs) || intervalMs <= 0) {
+    throw new RangeError("interval duration is invalid.");
+  }
+
+  if (typeof now !== "function") {
+    throw new TypeError("now must be a function returning a finite timestamp.");
+  }
+
+  const currentTime = now();
+
+  if (!Number.isFinite(currentTime)) {
+    throw new TypeError("now must be a function returning a finite timestamp.");
+  }
+  const completedCandles = candles.filter((candle, index) => {
+    if (!Array.isArray(candle) || candle.length < 7) {
       throw new Error(`MEXC candle ${index} is invalid.`);
     }
 
-    return positiveNumber(candle[4], `candle ${index} close`);
+    const openTime = Number(candle[0]);
+    const closeTime = Number(candle[6]);
+
+    if (
+      !Number.isSafeInteger(openTime) ||
+      !Number.isSafeInteger(closeTime) ||
+      openTime < 0 ||
+      !Number.isSafeInteger(openTime + intervalMs) ||
+      closeTime < openTime ||
+      closeTime >= openTime + intervalMs
+    ) {
+      throw new Error(`MEXC candle ${index} has invalid timestamps.`);
+    }
+
+    return closeTime < currentTime;
   });
+
+  for (let index = 1; index < completedCandles.length; index += 1) {
+    const previousOpen = Number(completedCandles[index - 1][0]);
+    const currentOpen = Number(completedCandles[index][0]);
+
+    if (currentOpen - previousOpen !== intervalMs) {
+      throw new Error("MEXC candles are not in continuous chronological order.");
+    }
+  }
+
+  if (completedCandles.length < limit) {
+    throw new Error("MEXC returned too few completed candles.");
+  }
+
+  const selectedCandles = completedCandles.slice(-limit);
+  const closingPrices = selectedCandles.map((candle, index) =>
+    positiveNumber(candle[4], `candle ${index} close`)
+  );
 
   const minQuantity = positiveNumber(
     market.baseSizePrecision,
