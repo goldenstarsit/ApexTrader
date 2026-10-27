@@ -199,6 +199,56 @@ test("HAR SELL deducts the Risk Manager fee from sale proceeds", () => {
 });
 
 
+test("HAR BUY keeps decimal trade total and fee consistent with balance", () => {
+  const balance = new TestBalance({
+    quoteBalance: 10,
+    baseBalance: 0,
+  });
+
+  const result = runStep({
+    balance,
+    currentPrice: 0.1,
+    quantity: 3,
+    riskManager: makeRiskManager({
+      maxTradeValue: 1,
+      feeRate: 0.01,
+    }),
+  });
+
+  assert.equal(result.signal, "BUY");
+  assert.equal(result.trade.total, 0.3);
+  assert.ok(Math.abs(result.trade.fee - 0.003) < 1e-15);
+  assert.ok(Math.abs(balance.quoteBalance - 9.697) < 1e-12);
+  assert.equal(balance.baseBalance, 3);
+  assert.equal(balance.snapshot().trades.length, 1);
+});
+
+test("HAR SELL keeps decimal trade total and fee consistent with balance", () => {
+  const balance = new TestBalance({
+    quoteBalance: 10,
+    baseBalance: 3,
+  });
+
+  const result = executeHARStep({
+    configuration: makeConfiguration(),
+    historicalPrices: Array(12).fill(0.1),
+    currentPrice: 0.103,
+    balance,
+    quantity: 3,
+    riskManager: makeRiskManager({
+      maxTradeValue: 1,
+      feeRate: 0.01,
+    }),
+  });
+
+  assert.equal(result.signal, "SELL");
+  assert.equal(result.trade.total, 0.309);
+  assert.ok(Math.abs(result.trade.fee - 0.00309) < 1e-15);
+  assert.ok(Math.abs(balance.quoteBalance - 10.30591) < 1e-12);
+  assert.equal(balance.baseBalance, 0);
+  assert.equal(balance.snapshot().trades.length, 1);
+});
+
 test("automatic HAR sizing uses verified market minimum and quantity step", () => {
   const balance = new TestBalance({ quoteBalance: 1000 });
   const result = runStep({
