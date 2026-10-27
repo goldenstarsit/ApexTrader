@@ -136,3 +136,164 @@ test("BUY keeps repeated decimal quantities exact", () => {
 
   assert.equal(balance.baseBalance, 0.3);
 });
+
+test("TestBalance creates and persists its initial state", async () => {
+  let savedState = null;
+  const store = {
+    async loadState() {
+      return savedState;
+    },
+    async saveState(state) {
+      savedState = structuredClone(state);
+    },
+  };
+
+  const balance = await TestBalance.create({
+    store,
+    quoteBalance: 500,
+    baseBalance: 2,
+  });
+
+  assert.deepEqual(balance.snapshot(), {
+    quoteBalance: 500,
+    baseBalance: 2,
+    trades: [],
+  });
+  assert.deepEqual(savedState, balance.snapshot());
+});
+
+test("TestBalance restores saved balances and trade history", async () => {
+  const savedState = {
+    quoteBalance: 400,
+    baseBalance: 1,
+    trades: [
+      {
+        side: "BUY",
+        quantity: 1,
+        price: 100,
+        total: 100,
+        fee: 0,
+        quoteBalance: 400,
+        baseBalance: 1,
+      },
+    ],
+  };
+
+  const store = {
+    async loadState() {
+      return structuredClone(savedState);
+    },
+    async saveState() {
+      throw new Error("Saving was not expected.");
+    },
+  };
+
+  const balance = await TestBalance.create({ store });
+
+  assert.deepEqual(balance.snapshot(), savedState);
+});
+
+test("buyAndPersist saves a successful BUY", async () => {
+  let savedState = null;
+  const store = {
+    async loadState() {
+      return savedState;
+    },
+    async saveState(state) {
+      savedState = structuredClone(state);
+    },
+  };
+
+  const balance = await TestBalance.create({
+    store,
+    quoteBalance: 500,
+  });
+
+  const trade = await balance.buyAndPersist(2, 100, { fee: 1 });
+
+  assert.equal(trade.side, "BUY");
+  assert.equal(balance.quoteBalance, 299);
+  assert.equal(balance.baseBalance, 2);
+  assert.deepEqual(savedState, balance.snapshot());
+  assert.equal(savedState.trades.length, 1);
+});
+
+test("sellAndPersist saves a successful SELL", async () => {
+  let savedState = {
+    quoteBalance: 100,
+    baseBalance: 3,
+    trades: [],
+  };
+
+  const store = {
+    async loadState() {
+      return structuredClone(savedState);
+    },
+    async saveState(state) {
+      savedState = structuredClone(state);
+    },
+  };
+
+  const balance = await TestBalance.create({ store });
+  const trade = await balance.sellAndPersist(2, 100, { fee: 1 });
+
+  assert.equal(trade.side, "SELL");
+  assert.equal(balance.quoteBalance, 299);
+  assert.equal(balance.baseBalance, 1);
+  assert.deepEqual(savedState, balance.snapshot());
+  assert.equal(savedState.trades.length, 1);
+});
+
+test("failed persistence restores balances and trade history", async () => {
+  const savedState = {
+    quoteBalance: 500,
+    baseBalance: 0,
+    trades: [],
+  };
+
+  const store = {
+    async loadState() {
+      return structuredClone(savedState);
+    },
+    async saveState() {
+      throw new Error("Simulated database write failure.");
+    },
+  };
+
+  const balance = await TestBalance.create({ store });
+  const before = balance.snapshot();
+
+  await assert.rejects(
+    balance.buyAndPersist(1, 100),
+    /Simulated database write failure/
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+});
+
+test("invalid persisted trade leaves balance unchanged", async () => {
+  let saveCalls = 0;
+  const store = {
+    async loadState() {
+      return null;
+    },
+    async saveState() {
+      saveCalls += 1;
+    },
+  };
+
+  const balance = await TestBalance.create({
+    store,
+    quoteBalance: 500,
+  });
+  const before = balance.snapshot();
+  const initialSaveCalls = saveCalls;
+
+  await assert.rejects(
+    balance.buyAndPersist(0, 100),
+    RangeError
+  );
+
+  assert.deepEqual(balance.snapshot(), before);
+  assert.equal(saveCalls, initialSaveCalls);
+});

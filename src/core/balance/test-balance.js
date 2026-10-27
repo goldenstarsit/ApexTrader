@@ -56,6 +56,8 @@ function decimalOperation(left, right, operation) {
 }
 
 export class TestBalance {
+  #stateStore;
+
   constructor({ quoteBalance = 10000, baseBalance = 0 } = {}) {
     assertNonNegativeNumber(quoteBalance, "quoteBalance");
     assertNonNegativeNumber(baseBalance, "baseBalance");
@@ -63,6 +65,113 @@ export class TestBalance {
     this.quoteBalance = quoteBalance;
     this.baseBalance = baseBalance;
     this.trades = [];
+    this.#stateStore = null;
+  }
+
+  static async create({
+    store,
+    quoteBalance = 10000,
+    baseBalance = 0,
+  } = {}) {
+    if (
+      !store ||
+      typeof store.loadState !== "function" ||
+      typeof store.saveState !== "function"
+    ) {
+      throw new TypeError("A compatible bot state store is required.");
+    }
+
+    const savedState = await store.loadState();
+    const balance = new TestBalance({
+      quoteBalance,
+      baseBalance,
+    });
+
+    if (savedState !== null) {
+      if (
+        !savedState ||
+        typeof savedState !== "object" ||
+        Array.isArray(savedState) ||
+        !Array.isArray(savedState.trades)
+      ) {
+        throw new TypeError("The saved bot state is invalid.");
+      }
+
+      assertNonNegativeNumber(
+        savedState.quoteBalance,
+        "saved quoteBalance"
+      );
+      assertNonNegativeNumber(
+        savedState.baseBalance,
+        "saved baseBalance"
+      );
+
+      for (const trade of savedState.trades) {
+        if (
+          !trade ||
+          typeof trade !== "object" ||
+          Array.isArray(trade) ||
+          !["BUY", "SELL"].includes(trade.side)
+        ) {
+          throw new TypeError("A saved trade record is invalid.");
+        }
+
+        for (const key of [
+          "quantity",
+          "price",
+          "total",
+          "fee",
+          "quoteBalance",
+          "baseBalance",
+        ]) {
+          assertNonNegativeNumber(trade[key], `saved trade ${key}`);
+        }
+
+        if (trade.quantity === 0 || trade.price === 0) {
+          throw new RangeError(
+            "Saved trade quantity and price must be positive."
+          );
+        }
+      }
+
+      balance.quoteBalance = savedState.quoteBalance;
+      balance.baseBalance = savedState.baseBalance;
+      balance.trades = savedState.trades.map((trade) => ({ ...trade }));
+    } else {
+      await store.saveState(balance.snapshot());
+    }
+
+    balance.#stateStore = store;
+    return balance;
+  }
+
+  async buyAndPersist(quantity, price, options = {}) {
+    return this.#tradeAndPersist(() => this.buy(quantity, price, options));
+  }
+
+  async sellAndPersist(quantity, price, options = {}) {
+    return this.#tradeAndPersist(() => this.sell(quantity, price, options));
+  }
+
+  async #tradeAndPersist(tradeOperation) {
+    if (!this.#stateStore) {
+      throw new Error(
+        "Persistent trading requires TestBalance.create() with a state store."
+      );
+    }
+
+    const previousState = this.snapshot();
+
+    try {
+      const trade = tradeOperation();
+      await this.#stateStore.saveState(this.snapshot());
+      return trade;
+    } catch (error) {
+      this.quoteBalance = previousState.quoteBalance;
+      this.baseBalance = previousState.baseBalance;
+      this.trades = previousState.trades.map((item) => ({ ...item }));
+      throw error;
+    }
   }
 
   buy(quantity, price, { fee = 0 } = {}) {
