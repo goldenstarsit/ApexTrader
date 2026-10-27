@@ -1,7 +1,7 @@
 import { evaluateHAR } from "./har-strategy.js";
 import { calculateMinimumQuantity } from "./calculate-minimum-quantity.js";
 
-export function executeHARStep({
+function prepareHARStep({
   configuration,
   historicalPrices,
   currentPrice,
@@ -25,13 +25,10 @@ export function executeHARStep({
   });
 
   if (evaluation.signal === "NO_ACTION") {
-    return { ...evaluation, trade: null };
+    return { evaluation, trade: null };
   }
 
-  if (
-    !riskManager ||
-    typeof riskManager.validateTrade !== "function"
-  ) {
+  if (!riskManager || typeof riskManager.validateTrade !== "function") {
     throw new TypeError("A compatible risk manager is required.");
   }
 
@@ -110,12 +107,66 @@ export function executeHARStep({
     feeRate: tradeFeeRate,
   });
 
+  return {
+    evaluation,
+    tradeQuantity,
+    riskResult,
+  };
+}
+
+export function executeHARStep(options) {
+  const prepared = prepareHARStep(options);
+
+  if (prepared.evaluation.signal === "NO_ACTION") {
+    return { ...prepared.evaluation, trade: null };
+  }
+
+  const { balance, currentPrice } = options;
+  const { evaluation, tradeQuantity, riskResult } = prepared;
   let trade = null;
 
   if (evaluation.signal === "BUY") {
-    trade = balance.buy(tradeQuantity, currentPrice, { fee: riskResult.fee });
+    trade = balance.buy(tradeQuantity, currentPrice, {
+      fee: riskResult.fee,
+    });
   } else if (evaluation.signal === "SELL") {
-    trade = balance.sell(tradeQuantity, currentPrice, { fee: riskResult.fee });
+    trade = balance.sell(tradeQuantity, currentPrice, {
+      fee: riskResult.fee,
+    });
+  }
+
+  return { ...evaluation, trade };
+}
+
+export async function executePersistentHARStep(options) {
+  const prepared = prepareHARStep(options);
+
+  if (prepared.evaluation.signal === "NO_ACTION") {
+    return { ...prepared.evaluation, trade: null };
+  }
+
+  const { balance, currentPrice } = options;
+  const { evaluation, tradeQuantity, riskResult } = prepared;
+
+  if (
+    typeof balance.buyAndPersist !== "function" ||
+    typeof balance.sellAndPersist !== "function"
+  ) {
+    throw new TypeError(
+      "Persistent HAR trading requires a persistent test balance."
+    );
+  }
+
+  let trade = null;
+
+  if (evaluation.signal === "BUY") {
+    trade = await balance.buyAndPersist(tradeQuantity, currentPrice, {
+      fee: riskResult.fee,
+    });
+  } else if (evaluation.signal === "SELL") {
+    trade = await balance.sellAndPersist(tradeQuantity, currentPrice, {
+      fee: riskResult.fee,
+    });
   }
 
   return { ...evaluation, trade };
