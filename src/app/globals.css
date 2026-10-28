@@ -657,3 +657,38 @@ td {
     font-size: 9px;
   }
 }
+
+/* Live public market-data status */
+.live-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: #a8b3c4;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.market-status {
+  padding: 0 18px 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.market-status p {
+  overflow-wrap: anywhere;
+}
+
+.market-error {
+  color: var(--negative);
+}
+
+@media (max-width: 380px) {
+  .market-status {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+}

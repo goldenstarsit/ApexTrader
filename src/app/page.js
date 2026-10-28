@@ -1,13 +1,39 @@
-const marketData = [
-  { pair: "BTC / USDT", price: "$67,420.50", change: "+2.41%", positive: true },
-  { pair: "ETH / USDT", price: "$3,520.80", change: "+1.18%", positive: true },
-  { pair: "BNB / USDT", price: "$612.40", change: "-0.62%", positive: false },
+"use client";
+
+import { useEffect, useState } from "react";
+
+const markets = [
+  { symbol: "BTCUSDT", pair: "BTC / USDT" },
+  { symbol: "ETHUSDT", pair: "ETH / USDT" },
+  { symbol: "BNBUSDT", pair: "BNB / USDT" },
 ];
 
 const strategies = [
-  { name: "DCA Strategy", detail: "Dollar-cost averaging", status: "Not configured" },
-  { name: "Grid Strategy", detail: "Grid-based trading", status: "Not configured" },
+  {
+    name: "DCA Strategy",
+    detail: "Dollar-cost averaging",
+    status: "Not configured",
+  },
+  {
+    name: "Grid Strategy",
+    detail: "Grid-based trading",
+    status: "Not configured",
+  },
 ];
+
+function formatPrice(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  }).format(value);
+}
+
+function formatChange(value) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}
 
 function Sidebar() {
   return (
@@ -39,8 +65,8 @@ function Sidebar() {
       <div className="sidebar-footer">
         <span className="status-dot" />
         <span>
-          <strong>Demo workspace</strong>
-          <small>No exchange connected</small>
+          <strong>Public market data</strong>
+          <small>No exchange account connected</small>
         </span>
       </div>
     </aside>
@@ -58,6 +84,103 @@ function MetricCard({ label, value, note }) {
 }
 
 function MarketTable() {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [updatedAt, setUpdatedAt] = useState(null);
+
+  useEffect(() => {
+    let stopped = false;
+    let inFlight = false;
+    let activeController = null;
+
+    async function loadMarkets() {
+      if (stopped || inFlight) {
+        return;
+      }
+
+      inFlight = true;
+      const controller = new AbortController();
+      activeController = controller;
+
+      try {
+        const results = await Promise.all(
+          markets.map(async (market) => {
+            const response = await fetch(
+              `/api/market-data?symbol=${market.symbol}&interval=5m&limit=12`,
+              { signal: controller.signal, cache: "no-store" },
+            );
+
+            if (!response.ok) {
+              const body = await response.json().catch(() => null);
+              throw new Error(
+                body?.error?.message || `Market request failed (${response.status}).`,
+              );
+            }
+
+            const body = await response.json();
+            const result = body?.data;
+
+            if (
+              result?.symbol !== market.symbol ||
+              !Number.isFinite(result.price) ||
+              !Array.isArray(result.closingPrices) ||
+              result.closingPrices.length < 2 ||
+              !result.closingPrices.every(
+                (price) => Number.isFinite(price) && price > 0,
+              )
+            ) {
+              throw new Error(`Invalid market data received for ${market.symbol}.`);
+            }
+
+            const firstClose = result.closingPrices[0];
+            const lastClose =
+              result.closingPrices[result.closingPrices.length - 1];
+
+            return {
+              ...market,
+              price: result.price,
+              change:
+                ((lastClose - firstClose) / firstClose) * 100,
+            };
+          }),
+        );
+
+        if (!stopped) {
+          setData(results);
+          setError("");
+          setUpdatedAt(new Date());
+        }
+      } catch (requestError) {
+        if (!stopped && requestError.name !== "AbortError") {
+          setError(
+            requestError.message ||
+              "Market data is temporarily unavailable. Please retry shortly.",
+          );
+        }
+      } finally {
+        inFlight = false;
+
+        if (!stopped) {
+          setLoading(false);
+        }
+
+        if (activeController === controller) {
+          activeController = null;
+        }
+      }
+    }
+
+    loadMarkets();
+    const timer = setInterval(loadMarkets, 30_000);
+
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      activeController?.abort();
+    };
+  }, []);
+
   return (
     <section className="panel" id="markets">
       <div className="panel-heading">
@@ -65,7 +188,27 @@ function MarketTable() {
           <p className="eyebrow">MARKET WATCH</p>
           <h2>Market overview</h2>
         </div>
-        <span className="demo-tag">Sample data</span>
+        <span className="live-tag">
+          <span className="status-dot" />
+          MEXC public
+        </span>
+      </div>
+
+      <div className="market-status" aria-live="polite">
+        {loading && <p>Loading live market data…</p>}
+        {!loading && !error && (
+          <p>
+            {updatedAt
+              ? `Updated at ${updatedAt.toLocaleTimeString()}`
+              : "Waiting for market data"}
+          </p>
+        )}
+        {error && (
+          <p className="market-error" role="status">
+            {error}
+            {data.length > 0 ? " Showing the last successful update." : ""}
+          </p>
+        )}
       </div>
 
       <div className="table-scroll">
@@ -74,24 +217,48 @@ function MarketTable() {
             <tr>
               <th>Trading pair</th>
               <th>Last price</th>
-              <th>24h change</th>
+              <th>Recent candle move</th>
             </tr>
           </thead>
           <tbody>
-            {marketData.map((market) => (
-              <tr key={market.pair}>
+            {data.map((market) => (
+              <tr key={market.symbol}>
                 <td className="pair-name">{market.pair}</td>
-                <td>{market.price}</td>
-                <td className={market.positive ? "positive" : "negative"}>
-                  {market.change}
+                <td>{formatPrice(market.price)}</td>
+                <td
+                  className={
+                    market.change > 0
+                      ? "positive"
+                      : market.change < 0
+                        ? "negative"
+                        : ""
+                  }
+                >
+                  {formatChange(market.change)}
                 </td>
               </tr>
             ))}
+
+            {loading && data.length === 0 && (
+              <tr>
+                <td colSpan={3}>Fetching prices from MEXC…</td>
+              </tr>
+            )}
+
+            {!loading && data.length === 0 && error && (
+              <tr>
+                <td colSpan={3}>No market data available.</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
+
       <p className="panel-footnote">
-        Illustrative prices only — not live exchange data.
+        Prices come from the MEXC public API through this app’s market-data
+        route. Recent candle move compares the first and last closing prices
+        in the returned candle window; it is not the 24-hour change.
+        Updates are attempted every 30 seconds. No trading orders are sent.
       </p>
     </section>
   );
@@ -182,20 +349,22 @@ export default function Home() {
         </div>
 
         <section className="risk-notice" id="risk">
-          <span className="risk-icon" aria-hidden="true">◇</span>
+          <span className="risk-icon" aria-hidden="true">
+            ◇
+          </span>
           <div>
             <h2>Risk controls come first</h2>
             <p>
-              Trading is disabled in this initial interface. Exchange
-              connectivity, strategy execution, and risk controls will be
-              implemented in later milestones.
+              Trading is disabled in this initial interface. Market prices are
+              public exchange data; account balances and strategy metrics
+              remain illustrative until their respective modules are connected.
             </p>
           </div>
         </section>
 
         <footer className="page-footer">
           <span>Apex Trader</span>
-          <span>Prototype · Demo data only</span>
+          <span>Simulation · Public market data</span>
         </footer>
       </main>
     </div>
