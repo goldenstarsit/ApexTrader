@@ -13,7 +13,10 @@ const symbols = [
   "XRPUSDT",
 ];
 
-function createFetchMock({ failingSymbols = [] } = {}) {
+function createFetchMock({
+  failingSymbols = [],
+  missingStepSymbols = [],
+} = {}) {
   const calls = [];
 
   const fetchImpl = async (input) => {
@@ -36,7 +39,9 @@ function createFetchMock({ failingSymbols = [] } = {}) {
       isSpotTradingAllowed: true,
       orderTypes: ["MARKET"],
       tradeSideType: "1",
-      filters: [{ stepSize: "0.001" }],
+      filters: missingStepSymbols.includes(symbol)
+        ? []
+        : [{ stepSize: "0.001" }],
       baseSizePrecision: "0.001",
       baseAssetPrecision: 8,
       quoteAssetPrecision: 8,
@@ -132,6 +137,37 @@ test("runs five independent HAR simulations with 100 USDT each", async () => {
     ) < 1e-10
   );
   assert.match(result.notice, /No live orders are placed/);
+});
+
+test("isolates unknown quantity-step failures from other simulations", async () => {
+  const { fetchImpl } = createFetchMock({
+    missingStepSymbols: ["ETHUSDT"],
+  });
+
+  const result = await runHARMultiSimulation({
+    symbols: ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+    quoteBalance: 100,
+    fetchImpl,
+  });
+
+  assert.equal(result.summary.requestedSymbols, 3);
+  assert.equal(result.summary.successfulSimulations, 2);
+  assert.equal(result.summary.failedSimulations, 1);
+  assert.equal(result.summary.successfulInitialCapitalTotal, 200);
+  assert.equal(result.results[0].status, "SUCCESS");
+  assert.equal(result.results[1].status, "FAILED");
+  assert.match(result.results[1].error, /verified quantity step/);
+  assert.equal(result.results[2].status, "SUCCESS");
+
+  const expectedEquity = result.results
+    .filter((entry) => entry.status === "SUCCESS")
+    .reduce((total, entry) => total + entry.finalEquity, 0);
+
+  assert.ok(
+    Math.abs(
+      result.summary.finalEquityOfSuccessfulSimulations - expectedEquity
+    ) < 1e-10
+  );
 });
 
 test("continues other currencies when one market-data request fails", async () => {
