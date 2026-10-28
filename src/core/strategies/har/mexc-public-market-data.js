@@ -152,7 +152,7 @@ export async function getMexcPublicMarketData({
       openTime < 0 ||
       !Number.isSafeInteger(openTime + intervalMs) ||
       closeTime < openTime ||
-      closeTime >= openTime + intervalMs
+      closeTime > openTime + intervalMs
     ) {
       throw new Error(`MEXC candle ${index} has invalid timestamps.`);
     }

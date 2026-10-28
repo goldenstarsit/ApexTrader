@@ -75,7 +75,7 @@ function createFetchMock({ failingSymbols = [] } = {}) {
               "99",
               "100",
               "10",
-              openTime + 299_999,
+              openTime + 300_000,
             ];
           }),
       };

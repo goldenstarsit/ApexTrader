@@ -86,7 +86,7 @@ function createFetch({
             "98",
             String(100 + index),
             "10",
-            openTime + intervalMs - 1,
+            openTime + intervalMs,
           ];
         }),
     };

@@ -42,7 +42,7 @@ function createFetchMock() {
             const openTime = 1_700_000_000_000 - (13 - index) * 300_000;
             return [
               openTime, "100", "101", "99", "100", "10",
-              openTime + 299_999,
+              openTime + 300_000,
             ];
           }),
       };
