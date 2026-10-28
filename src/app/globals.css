@@ -692,3 +692,20 @@ td {
     padding-left: 14px;
   }
 }
+
+.market-freshness {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.market-freshness.fresh {
+  color: var(--positive);
+}
+
+.market-freshness.stale {
+  color: #f4c66a;
+}
+
+.market-freshness.unavailable {
+  color: var(--negative);
+}

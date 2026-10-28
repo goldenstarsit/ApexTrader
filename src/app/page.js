@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { mergeMarketResults } from "./market-data-state.js";
 
 const markets = [
   { symbol: "BTCUSDT", pair: "BTC / USDT" },
@@ -104,7 +105,7 @@ function MarketTable() {
       activeController = controller;
 
       try {
-        const results = await Promise.all(
+        const outcomes = await Promise.allSettled(
           markets.map(async (market) => {
             const response = await fetch(
               `/api/market-data?symbol=${market.symbol}&interval=5m&limit=12`,
@@ -147,8 +148,18 @@ function MarketTable() {
         );
 
         if (!stopped) {
-          setData(results);
-          setError("");
+          const failedCount = outcomes.filter(
+            (outcome) => outcome.status === "rejected",
+          ).length;
+
+          setData((previousData) =>
+            mergeMarketResults(markets, outcomes, previousData),
+          );
+          setError(
+            failedCount === 0
+              ? ""
+              : `${failedCount} market request${failedCount === 1 ? "" : "s"} failed. Check each row's status.`,
+          );
           setUpdatedAt(new Date());
         }
       } catch (requestError) {
@@ -196,17 +207,16 @@ function MarketTable() {
 
       <div className="market-status" aria-live="polite">
         {loading && <p>Loading live market data…</p>}
-        {!loading && !error && (
+        {!loading && (
           <p>
             {updatedAt
-              ? `Updated at ${updatedAt.toLocaleTimeString()}`
+              ? `Last refresh attempt at ${updatedAt.toLocaleTimeString()}`
               : "Waiting for market data"}
           </p>
         )}
         {error && (
           <p className="market-error" role="status">
             {error}
-            {data.length > 0 ? " Showing the last successful update." : ""}
           </p>
         )}
       </div>
@@ -218,13 +228,18 @@ function MarketTable() {
               <th>Trading pair</th>
               <th>Last price</th>
               <th>Recent candle move</th>
+              <th>Data status</th>
             </tr>
           </thead>
           <tbody>
             {data.map((market) => (
               <tr key={market.symbol}>
                 <td className="pair-name">{market.pair}</td>
-                <td>{formatPrice(market.price)}</td>
+                <td>
+                  {market.price === null
+                    ? "—"
+                    : formatPrice(market.price)}
+                </td>
                 <td
                   className={
                     market.change > 0
@@ -234,20 +249,29 @@ function MarketTable() {
                         : ""
                   }
                 >
-                  {formatChange(market.change)}
+                  {market.change === null
+                    ? "—"
+                    : formatChange(market.change)}
+                </td>
+                <td className={`market-freshness ${market.freshness}`}>
+                  {market.freshness === "fresh"
+                    ? "Fresh"
+                    : market.freshness === "stale"
+                      ? "Stale"
+                      : "Unavailable"}
                 </td>
               </tr>
             ))}
 
             {loading && data.length === 0 && (
               <tr>
-                <td colSpan={3}>Fetching prices from MEXC…</td>
+                <td colSpan={4}>Fetching prices from MEXC…</td>
               </tr>
             )}
 
             {!loading && data.length === 0 && error && (
               <tr>
-                <td colSpan={3}>No market data available.</td>
+                <td colSpan={4}>No market data available.</td>
               </tr>
             )}
           </tbody>
