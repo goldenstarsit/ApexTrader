@@ -36,6 +36,47 @@ function formatChange(value) {
   return `${sign}${value.toFixed(2)}%`;
 }
 
+function formatAge(timestamp, now) {
+  if (!timestamp) {
+    return "Never";
+  }
+
+  if (!Number.isFinite(now)) {
+    return "Unknown";
+  }
+
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now - Date.parse(timestamp)) / 1000),
+  );
+
+  if (!Number.isFinite(elapsedSeconds)) {
+    return "Unknown";
+  }
+
+  if (elapsedSeconds < 60) {
+    return `${elapsedSeconds}s ago`;
+  }
+
+  const minutes = Math.floor(elapsedSeconds / 60);
+
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+function formatTimestamp(timestamp) {
+  return timestamp ? new Date(timestamp).toLocaleTimeString() : "Never";
+}
+
 function Sidebar() {
   return (
     <aside className="sidebar">
@@ -89,6 +130,7 @@ function MarketTable() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatedAt, setUpdatedAt] = useState(null);
+  const [clockNow, setClockNow] = useState(null);
 
   useEffect(() => {
     let stopped = false;
@@ -184,10 +226,12 @@ function MarketTable() {
 
     loadMarkets();
     const timer = setInterval(loadMarkets, 30_000);
+    const clockTimer = setInterval(() => setClockNow(Date.now()), 1000);
 
     return () => {
       stopped = true;
       clearInterval(timer);
+      clearInterval(clockTimer);
       activeController?.abort();
     };
   }, []);
@@ -208,11 +252,14 @@ function MarketTable() {
       <div className="market-status" aria-live="polite">
         {loading && <p>Loading live market data…</p>}
         {!loading && (
-          <p>
-            {updatedAt
-              ? `Last refresh attempt at ${updatedAt.toLocaleTimeString()}`
-              : "Waiting for market data"}
-          </p>
+          <div>
+            <p>
+              {updatedAt
+                ? `Last refresh attempt: ${updatedAt.toLocaleTimeString()}`
+                : "Waiting for market data"}
+            </p>
+            <p>Last successful update and its age are shown for each market below.</p>
+          </div>
         )}
         {error && (
           <p className="market-error" role="status">
@@ -228,6 +275,7 @@ function MarketTable() {
               <th>Trading pair</th>
               <th>Last price</th>
               <th>Recent candle move</th>
+              <th>Last successful update</th>
               <th>Data status</th>
             </tr>
           </thead>
@@ -253,25 +301,38 @@ function MarketTable() {
                     ? "—"
                     : formatChange(market.change)}
                 </td>
+                <td>
+                  <span>{formatTimestamp(market.lastSuccessfulAt)}</span>
+                  <small className="market-age">
+                    {formatAge(market.lastSuccessfulAt, clockNow)}
+                  </small>
+                </td>
                 <td className={`market-freshness ${market.freshness}`}>
-                  {market.freshness === "fresh"
-                    ? "Fresh"
-                    : market.freshness === "stale"
-                      ? "Stale"
-                      : "Unavailable"}
+                  <span>
+                    {market.freshness === "fresh"
+                      ? "Fresh"
+                      : market.freshness === "stale"
+                        ? "Stale"
+                        : "Unavailable"}
+                  </span>
+                  {market.errorMessage && (
+                    <small className="market-row-error">
+                      {market.errorMessage}
+                    </small>
+                  )}
                 </td>
               </tr>
             ))}
 
             {loading && data.length === 0 && (
               <tr>
-                <td colSpan={4}>Fetching prices from MEXC…</td>
+                <td colSpan={5}>Fetching prices from MEXC…</td>
               </tr>
             )}
 
             {!loading && data.length === 0 && error && (
               <tr>
-                <td colSpan={4}>No market data available.</td>
+                <td colSpan={5}>No market data available.</td>
               </tr>
             )}
           </tbody>

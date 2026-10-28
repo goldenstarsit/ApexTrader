@@ -1,4 +1,9 @@
-export function mergeMarketResults(markets, outcomes, previousData) {
+export function mergeMarketResults(
+  markets,
+  outcomes,
+  previousData,
+  now = new Date().toISOString(),
+) {
   const previousBySymbol = new Map(
     previousData.map((market) => [market.symbol, market]),
   );
@@ -10,8 +15,16 @@ export function mergeMarketResults(markets, outcomes, previousData) {
       return {
         ...outcome.value,
         freshness: "fresh",
+        lastSuccessfulAt: now,
+        errorMessage: null,
       };
     }
+
+    const reason = outcome?.reason;
+    const errorMessage =
+      typeof reason?.message === "string" && reason.message.trim()
+        ? reason.message
+        : "Market data request failed. Try again shortly.";
 
     const previous = previousBySymbol.get(market.symbol);
 
@@ -19,6 +32,7 @@ export function mergeMarketResults(markets, outcomes, previousData) {
       return {
         ...previous,
         freshness: "stale",
+        errorMessage,
       };
     }
 
@@ -27,6 +41,8 @@ export function mergeMarketResults(markets, outcomes, previousData) {
       price: null,
       change: null,
       freshness: "unavailable",
+      lastSuccessfulAt: null,
+      errorMessage,
     };
   });
 }
