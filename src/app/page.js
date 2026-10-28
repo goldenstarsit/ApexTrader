@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { mergeMarketResults } from "./market-data-state.js";
+import { formatAge, formatTimestamp } from "./market-data-format.js";
 
 const markets = [
   { symbol: "BTCUSDT", pair: "BTC / USDT" },
@@ -36,46 +37,7 @@ function formatChange(value) {
   return `${sign}${value.toFixed(2)}%`;
 }
 
-function formatAge(timestamp, now) {
-  if (!timestamp) {
-    return "Never";
-  }
 
-  if (!Number.isFinite(now)) {
-    return "Unknown";
-  }
-
-  const elapsedSeconds = Math.max(
-    0,
-    Math.floor((now - Date.parse(timestamp)) / 1000),
-  );
-
-  if (!Number.isFinite(elapsedSeconds)) {
-    return "Unknown";
-  }
-
-  if (elapsedSeconds < 60) {
-    return `${elapsedSeconds}s ago`;
-  }
-
-  const minutes = Math.floor(elapsedSeconds / 60);
-
-  if (minutes < 60) {
-    return `${minutes}m ago`;
-  }
-
-  const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
-
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function formatTimestamp(timestamp) {
-  return timestamp ? new Date(timestamp).toLocaleTimeString() : "Never";
-}
 
 function Sidebar() {
   return (
