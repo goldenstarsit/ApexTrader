@@ -302,3 +302,39 @@ test("returns a clean decimal quantity for a fractional step", () => {
   assert.equal(String(result.quantity), "0.3");
 
 });
+
+test("rounds a fractional minimum quantity up to a valid step", () => {
+  const result = calculateMinimumQuantity({
+    ...defaults,
+    price: 100,
+    quantityStep: 0.01,
+    minQuantity: 0.025,
+    minQuoteAmount: 1,
+    maxQuoteAmount: 100,
+    availableQuoteBalance: 100,
+    feeRate: 0,
+    maxTradeValue: 100,
+  });
+
+  assert.equal(result.quantity, 0.03);
+  assert.ok(result.quantity >= 0.025);
+  assert.equal(result.quantity / 0.01, 3);
+});
+
+test("rounds a minimum quantity above three steps to the next step", () => {
+  const result = calculateMinimumQuantity({
+    ...defaults,
+    price: 100,
+    quantityStep: 0.1,
+    minQuantity: 0.31,
+    minQuoteAmount: 1,
+    maxQuoteAmount: 100,
+    availableQuoteBalance: 100,
+    feeRate: 0,
+    maxTradeValue: 100,
+  });
+
+  assert.equal(result.quantity, 0.4);
+  assert.ok(result.quantity >= 0.31);
+  assert.equal(result.quantity / 0.1, 4);
+});
