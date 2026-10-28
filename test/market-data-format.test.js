@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { formatAge, formatTimestamp } from "../src/app/market-data-format.js";
+import { formatAge, formatChange, formatPrice, formatTimestamp } from "../src/app/market-data-format.js";
 
 test("formatAge handles missing timestamps", () => {
   assert.equal(formatAge(null, Date.now()), "Never");
@@ -43,4 +43,18 @@ test("formatTimestamp formats valid dates using the runtime locale", () => {
     formatTimestamp(timestamp),
     new Date(timestamp).toLocaleTimeString(),
   );
+});
+
+test("formatPrice uses USD currency formatting with at least two decimals", () => {
+  assert.equal(formatPrice(1234.5), "$1,234.50");
+  assert.equal(formatPrice(0.12345678), "$0.12345678");
+});
+
+test("formatChange includes a plus sign for positive movement", () => {
+  assert.equal(formatChange(1.236), "+1.24%");
+});
+
+test("formatChange keeps negative and zero movement readable", () => {
+  assert.equal(formatChange(-1.236), "-1.24%");
+  assert.equal(formatChange(0), "0.00%");
 });

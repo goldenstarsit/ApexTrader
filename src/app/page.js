@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { mergeMarketResults } from "./market-data-state.js";
-import { formatAge, formatTimestamp } from "./market-data-format.js";
+import { formatAge, formatChange, formatPrice, formatTimestamp } from "./market-data-format.js";
 
 const markets = [
   { symbol: "BTCUSDT", pair: "BTC / USDT" },
@@ -23,19 +23,7 @@ const strategies = [
   },
 ];
 
-function formatPrice(value) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8,
-  }).format(value);
-}
 
-function formatChange(value) {
-  const sign = value > 0 ? "+" : "";
-  return `${sign}${value.toFixed(2)}%`;
-}
 
 
 

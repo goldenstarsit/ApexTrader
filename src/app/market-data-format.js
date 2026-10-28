@@ -48,3 +48,17 @@ export function formatTimestamp(timestamp) {
 
   return date.toLocaleTimeString();
 }
+
+export function formatPrice(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  }).format(value);
+}
+
+export function formatChange(value) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${value.toFixed(2)}%`;
+}
