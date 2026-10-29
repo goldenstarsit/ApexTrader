@@ -169,7 +169,7 @@ test("does not substitute normal-order limits for missing market-order limits", 
   assert.equal(result.rules.maxQuoteAmountMarket, null);
 });
 
-test("uses an explicitly supplied filter stepSize", async () => {
+test("does not infer quantity step from an undocumented filter field", async () => {
   const { fetchImpl } = createFetch({
     filters: [{ stepSize: "0.00001" }],
   });
@@ -180,7 +180,26 @@ test("uses an explicitly supplied filter stepSize", async () => {
     fetchImpl,
   });
 
-  assert.equal(result.rules.quantityStep, 0.00001);
+  assert.equal(result.rules.quantityStep, null);
+});
+
+test("ignores stepSize on a non-quantity filter", async () => {
+  const { fetchImpl } = createFetch({
+    filters: [
+      {
+        filterType: "PERCENT_PRICE_BY_SIDE",
+        stepSize: "0.00001",
+      },
+    ],
+  });
+
+  const result = await getMexcPublicMarketData({
+    symbol: "BTCUSDT",
+    limit: 2,
+    fetchImpl,
+  });
+
+  assert.equal(result.rules.quantityStep, null);
 });
 
 test("rejects a market that does not support MARKET orders", async () => {

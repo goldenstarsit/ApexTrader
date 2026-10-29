@@ -3,14 +3,20 @@ import test from "node:test";
 
 import { runHARPublicSimulation } from "../scripts/har-simulation.js";
 
-function createFetchMock({ includeStepSize = true } = {}) {
+function createFetchMock({ includeFilters = true } = {}) {
   const market = {
     symbol: "BTCUSDT",
     status: "1",
     isSpotTradingAllowed: true,
     orderTypes: ["MARKET"],
     tradeSideType: "1",
-    filters: includeStepSize ? [{ stepSize: "0.001" }] : [],
+    filters: includeFilters
+      ? [{
+          filterType: "PERCENT_PRICE_BY_SIDE",
+          bidMultiplierUp: "0.005",
+          askMultiplierDown: "0.005",
+        }]
+      : [],
     baseSizePrecision: "0.001",
     baseAssetPrecision: 8,
     quoteAssetPrecision: 8,
@@ -52,20 +58,27 @@ function createFetchMock({ includeStepSize = true } = {}) {
   };
 }
 
-test("HAR CLI runs one public-data simulation step without live orders", async () => {
-  const result = await runHARPublicSimulation({
-    symbol: "BTCUSDT",
-    fetchImpl: createFetchMock(),
-  });
+test("HAR simulation rejects an undocumented quantity step without live orders", async () => {
+  const requestedPaths = [];
+  const mock = createFetchMock();
 
-  assert.equal(result.mode, "SIMULATION_ONLY");
-  assert.equal(result.symbol, "BTCUSDT");
-  assert.equal(result.currentPrice, 97);
-  assert.equal(result.historicalCloseCount, 12);
-  assert.equal(result.steps.length, 1);
-  assert.equal(result.steps[0].signal, "BUY");
-  assert.equal(result.finalBalance.trades.length, 1);
-  assert.match(result.notice, /No live orders are placed/);
+  await assert.rejects(
+    runHARPublicSimulation({
+      symbol: "BTCUSDT",
+      fetchImpl: async (input, options) => {
+        const url = new URL(String(input));
+        requestedPaths.push(url.pathname);
+        return mock(input, options);
+      },
+    }),
+    /verified quantity step/
+  );
+
+  assert.equal(requestedPaths.length, 3);
+  assert.ok(requestedPaths.every((path) =>
+    ["/api/v3/exchangeInfo", "/api/v3/ticker/price", "/api/v3/klines"].includes(path)
+  ));
+  assert.ok(!requestedPaths.some((path) => path.endsWith("/order")));
 });
 
 test("HAR simulation fails safely when quantity step is unknown", async () => {
@@ -77,7 +90,7 @@ test("HAR simulation fails safely when quantity step is unknown", async () => {
       fetchImpl: async (input, options) => {
         const url = new URL(String(input));
         requestedPaths.push(url.pathname);
-        return createFetchMock({ includeStepSize: false })(input, options);
+        return createFetchMock({ includeFilters: false })(input, options);
       },
     }),
     /verified quantity step/

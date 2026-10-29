@@ -183,16 +183,7 @@ export async function getMexcPublicMarketData({
     "baseSizePrecision"
   );
 
-  const stepFilter = market.filters.find(
-    (filter) =>
-      filter &&
-      filter.stepSize !== undefined &&
-      filter.stepSize !== null
-  );
-
-  const quantityStep = stepFilter
-    ? positiveNumber(stepFilter.stepSize, "filter stepSize")
-    : null;
+  const quantityStep = null;
 
   const quoteAmountPrecision = positiveNumber(
     market.quoteAmountPrecision,
