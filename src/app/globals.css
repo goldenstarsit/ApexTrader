@@ -728,3 +728,177 @@ td {
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+
+
+/* HAR simulation panel */
+.har-simulation-panel {
+  margin-top: 18px;
+}
+
+.har-description {
+  margin: 0;
+  padding: 0 18px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.har-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 0 18px 20px;
+}
+
+.har-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.har-form input,
+.har-form select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+}
+
+.har-form input:focus,
+.har-form select:focus {
+  border-color: var(--accent);
+}
+
+.har-run-button {
+  align-self: end;
+  min-height: 39px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #10150e;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.har-run-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.har-error,
+.har-progress {
+  margin: 0 18px 16px;
+  padding: 11px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.har-error {
+  border: 1px solid #65343b;
+  background: #291a20;
+  color: var(--negative);
+}
+
+.har-progress {
+  color: var(--muted);
+}
+
+.har-results {
+  padding: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.har-result-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.har-result-heading h3,
+.har-steps-title {
+  margin: 0;
+  font-size: 14px;
+}
+
+.har-result-status {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--positive);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.har-result-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.har-result-metrics article {
+  min-width: 0;
+  padding: 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.har-result-metrics article span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.har-result-metrics article strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
+.har-config-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 15px 0 22px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.har-steps-title {
+  margin-bottom: 12px;
+}
+
+.har-notice {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+@media (max-width: 600px) {
+  .har-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .har-result-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .har-result-heading {
+    flex-direction: column;
+  }
+}

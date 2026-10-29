@@ -299,6 +299,265 @@ function MarketTable() {
   );
 }
 
+function HARSimulationPanel() {
+  const [settings, setSettings] = useState({
+    symbol: "BTCUSDT",
+    quoteBalance: "1000",
+    baseBalance: "0",
+    rangeValue: "0.5",
+    maxTradeValue: "100",
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  function updateSetting(event) {
+    const { name, value } = event.target;
+    setSettings((previous) => ({ ...previous, [name]: value }));
+  }
+
+  async function runSimulation(event) {
+    event.preventDefault();
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const response = await fetch("/api/har-simulation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          symbol: settings.symbol,
+          quoteBalance: Number(settings.quoteBalance),
+          baseBalance: Number(settings.baseBalance),
+          rangeValue: Number(settings.rangeValue),
+          maxTradeValue: Number(settings.maxTradeValue),
+        }),
+      });
+
+      let body;
+      try {
+        body = await response.json();
+      } catch {
+        throw new Error("The simulation API returned an unreadable response.");
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          body?.error?.message ||
+            `Simulation failed with HTTP ${response.status}.`,
+        );
+      }
+
+      if (
+        !body?.data ||
+        body.data.mode !== "SIMULATION_ONLY" ||
+        !Array.isArray(body.data.steps) ||
+        !body.data.finalBalance
+      ) {
+        throw new Error("The simulation API returned an invalid result.");
+      }
+
+      setResult(body.data);
+    } catch (requestError) {
+      setError(
+        requestError.message ||
+          "Simulation is temporarily unavailable. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function numberText(value, maximumFractionDigits = 8) {
+    if (!Number.isFinite(value)) return "—";
+    return new Intl.NumberFormat("en-US", {
+      maximumFractionDigits,
+    }).format(value);
+  }
+
+  return (
+    <section className="panel har-simulation-panel" id="har-simulation">
+      <div className="panel-heading">
+        <div>
+          <p className="eyebrow">HAR STRATEGY</p>
+          <h2>Historical average reversion</h2>
+        </div>
+        <span className="count-tag">Simulation only</span>
+      </div>
+
+      <p className="har-description">
+        Test HAR signals with public MEXC market data and a simulated balance.
+        This panel never submits live orders.
+      </p>
+
+      <form className="har-form" onSubmit={runSimulation}>
+        <label>
+          Trading pair
+          <select
+            name="symbol"
+            value={settings.symbol}
+            onChange={updateSetting}
+            disabled={loading}
+          >
+            <option value="BTCUSDT">BTC / USDT</option>
+            <option value="ETHUSDT">ETH / USDT</option>
+            <option value="BNBUSDT">BNB / USDT</option>
+          </select>
+        </label>
+
+        <label>
+          Quote balance (USDT)
+          <input
+            type="number"
+            name="quoteBalance"
+            min="0"
+            step="any"
+            required
+            value={settings.quoteBalance}
+            onChange={updateSetting}
+            disabled={loading}
+          />
+        </label>
+
+        <label>
+          Base balance
+          <input
+            type="number"
+            name="baseBalance"
+            min="0"
+            step="any"
+            required
+            value={settings.baseBalance}
+            onChange={updateSetting}
+            disabled={loading}
+          />
+        </label>
+
+        <label>
+          HAR range (%)
+          <input
+            type="number"
+            name="rangeValue"
+            min="0.000001"
+            max="99.999999"
+            step="any"
+            required
+            value={settings.rangeValue}
+            onChange={updateSetting}
+            disabled={loading}
+          />
+        </label>
+
+        <label>
+          Maximum trade value (USDT)
+          <input
+            type="number"
+            name="maxTradeValue"
+            min="0.000001"
+            step="any"
+            required
+            value={settings.maxTradeValue}
+            onChange={updateSetting}
+            disabled={loading}
+          />
+        </label>
+
+        <button className="har-run-button" type="submit" disabled={loading}>
+          {loading ? "Running simulation…" : "Run HAR simulation"}
+        </button>
+      </form>
+
+      {error && (
+        <p className="har-error" role="alert">
+          {error}
+        </p>
+      )}
+
+      {loading && (
+        <p className="har-progress" role="status">
+          Fetching public market data and calculating simulated results…
+        </p>
+      )}
+
+      {result && (
+        <div className="har-results" aria-live="polite">
+          <div className="har-result-heading">
+            <div>
+              <p className="eyebrow">SIMULATION RESULT</p>
+              <h3>{result.symbol} · {result.mode}</h3>
+            </div>
+            <span className="har-result-status">No live orders</span>
+          </div>
+
+          <div className="har-result-metrics">
+            <article>
+              <span>Current price</span>
+              <strong>{formatPrice(result.currentPrice)}</strong>
+            </article>
+            <article>
+              <span>Historical closes</span>
+              <strong>{numberText(result.historicalCloseCount, 0)}</strong>
+            </article>
+            <article>
+              <span>Simulated trades</span>
+              <strong>{numberText(result.finalBalance.trades?.length ?? 0, 0)}</strong>
+            </article>
+            <article>
+              <span>Quote balance (USDT)</span>
+              <strong>{numberText(result.finalBalance.quoteBalance, 8)}</strong>
+            </article>
+            <article>
+              <span>Base balance</span>
+              <strong>{numberText(result.finalBalance.baseBalance, 8)}</strong>
+            </article>
+          </div>
+
+          <div className="har-config-summary">
+            <span>Average period: {result.configuration.averagePeriodMinutes} min</span>
+            <span>Check interval: {result.configuration.priceCheckIntervalMinutes} min</span>
+            <span>Range: {numberText(result.configuration.rangeValue)}%</span>
+          </div>
+
+          <h3 className="har-steps-title">Simulation steps</h3>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Step</th>
+                  <th>Signal</th>
+                  <th>Trade</th>
+                  <th>Quantity</th>
+                  <th>Price</th>
+                  <th>Total</th>
+                  <th>Fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.steps.map((step) => (
+                  <tr key={step.step}>
+                    <td>{step.step}</td>
+                    <td className={step.signal === "BUY" ? "positive" : step.signal === "SELL" ? "negative" : ""}>
+                      {step.signal}
+                    </td>
+                    <td>{step.trade?.side ?? "—"}</td>
+                    <td>{step.trade ? numberText(step.trade.quantity) : "—"}</td>
+                    <td>{step.trade ? formatPrice(step.trade.price) : "—"}</td>
+                    <td>{step.trade ? formatPrice(step.trade.total) : "—"}</td>
+                    <td>{step.trade ? numberText(step.trade.fee) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="har-notice">{result.notice}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StrategyPanel() {
   return (
     <section className="panel" id="strategies">
@@ -382,6 +641,9 @@ export default function Home() {
           <MarketTable />
           <StrategyPanel />
         </div>
+
+
+        <HARSimulationPanel />
 
         <section className="risk-notice" id="risk">
           <span className="risk-icon" aria-hidden="true">
